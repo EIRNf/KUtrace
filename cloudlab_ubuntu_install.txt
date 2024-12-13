@@ -14,12 +14,11 @@ $ sudo apt install dwarves
 # Start - Install Unpatched Kernel
 
 Get Kernel tar 
-$ wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.15.89.tar.xz
-$ tar -xf linux-5.15.89.tar.gz
+$ wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.230.tar.xz
+$ tar -xf linux-5.10.230.tar.xz
 
 Configure Kernel
-
-$ cd linux-5.15.89
+$ cd linux-5.10.230/
 
 Copy current kernel config
 $ cp -v /boot/config-$(uname -r) .config
@@ -49,5 +48,154 @@ Reboot
 $ sudo reboot
 Confirm install
 $ uname -rs
+
+
+
+# Start - Patch and Install Kernel
+
+Get Kernel tar 
+$ wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.230.tar.xz
+$ tar -xf linux-5.10.230.tar.xz
+
+Configure Kernel
+$ cd linux-5.10.230/
+
+Copy current kernel config
+$ cp -v /boot/config-$(uname -r) .config
+
+Use localmodeconfig to only select currently utilized modules
+$ make localmodconfig
+$ (press enter for every option)
+
+Modify config to allow build disable certificate stuff
+$ scripts/config --disable SYSTEM_TRUSTED_KEYS
+$ scripts/config --disable SYSTEM_REVOCATION_KEYS
+$ scripts/config --set-str CONFIG_SYSTEM_TRUSTED_KEYS ""
+$ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS ""
+
+
+
+Patched files for a given kernel are found here
+- /KUtrace/linux
+
+Copy Patched files to linux kernel
+$ cp -r KUtrace/linux/patches-linux-5.10.66-x86/. .
+Find all patched files 
+$ find . -name "*.patched"
+
+For each patched file you need to manually copy the patched lines in the corresponding place to the source file to be compiled.
+For each of those other than .config, in the 5.10 directory do 
+$ ls -l foo*
+to verify that the base file exists, then do 
+$ cp foo foo.original
+$ cp foo foo.patched
+to get ready for manually applying edits to foo.patched.
+Save the modified version, and then copy it to the base name: 
+$ cp foo.patched foo
+
+Path files in the following order.
+
+Necesssary Kernel/Arch
+./include/linux/kutrace.h.patched 
+./arch/x86/Kconfig.patched 
+./kernel/Makefile.patched 
+./kernel/kutrace/Makefile.patched 
+./kernel/kutrace/kutrace.c.patched
+
+
+Control Hook and trace timestamps
+./arch/x86/entry/common.c.patched 
+./arch/x86/kernel/apic/apic.c.patched
+
+Scheduler 
+./kernel/sched/core.c.patched
+
+Trace Interrupts
+./arch/x86/kernel/irq_work.c.patched 
+./arch/x86/kernel/smp.c.patched 
+./arch/x86/kernel/irq.c.patched 
+./kernel/softirq.c.patched
+
+Trace Pagefaults
+./arch/x86/mm/fault.c.patched
+
+Trace Execve target file
+./fs/exec.c.patched
+
+Trace low power idle instructions 
+./drivers/idle/intel_idle.c.patched 
+./drivers/acpi/acpi_pad.c.patched 
+./drivers/acpi/processor_idle.c.patched
+
+Trace frquency changes
+./arch/x86/kernel/acpi/cstate.c.patched
+
+Trace TCP 
+./net/ipv4/tcp_input.c.patched 
+./net/ipv4/tcp_output.c.patched 
+./net/ipv4/udp.c.patched
+
+
+Copy .config to .config.original. Next we will modify .config and copy it to .config.patched. You will then have three files
+.config 
+.config.original 
+.config.patched
+with .config identical to .config.patched.
+Should notice new KUtrace configuration option and enable it 
+  $ make menuconfig
+To see the KUTrace option both HZ_PERIODIC and 64BIT have to be true 
+
+Check current sampling frequency
+  $ grep 'HZ' /boot/config-$(uname -r)
+You want to be sure that HZ_PERIODIC is set and that the various NO_HZ choices are not set.
+
+Save the updated configuration. Copy it to .config.patched. Double-check your three files:
+.config .config.original .config.patched
+
+Compile the kernel
+$ fakeroot make -j${NUM_PROCS} LOCALVERSION=${KERNEL_NAME_APPED}
+
+Build successful if following command returns 0
+$ echo $?
+
+# Install
+Kernel modules
+$ sudo make modules_install
+Kernel itself
+$ sudo make install
+Reboot
+$ sudo reboot
+Confirm install
+$ uname -rs
+
+This should show the just-built, patched, kernel version and build date. We are almost done.
+
+
+Most of KUtrace is implemented in a loadable module, whose source is kutrace_mod.c.
+- /KUtrace/linux/module
+$ sudo make
+Output should be kutrace_mod.ko
+
+When ready to allow tracing, insert the loadable kernel
+$ sudo insmod kutrace_mod.ko tracemb=20
+where the 20 sets aside 20MB of trace buffer. You can pick other values. At 4 bytes each, 20MB holds 5M event entries, which is fine for class work. All the examples in the book used 20MB.
+
+When you want to disable tracing, use
+  $ sudo rmmod kutrace_mod.ko
+
+
+Build kutrace_mod and run with
+$ ./kutrace_control
+
+With the module installed, run the kutrace_control program. It will print the prompt
+control> 
+Typing go traces; then stop ends tracing and writes a raw binary trace file. Postprocess that and you will get an HTML file showing the CPU activity. Congratulations. Go celebrate.
+
+
+When things look stable, you could start $ ./kutrace_control in one command-line window, up to the control> prompt.
+In a second command-line window get ready to run the supplied hello_world_trace program, by typing but do NOT hit <cr>: $ ./hello_world_trace
+Then do these three steps:
+first window: goipc <cr>
+second window: <cr> (running hello_world_trace) first window: stop <cr>
 
 
