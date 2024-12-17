@@ -24,7 +24,7 @@ Copy current kernel config
 $ cp -v /boot/config-$(uname -r) .config
 
 Use localmodeconfig to only select currently utilized modules
-$ make localmodeconfig
+$ make localmodconfig
 $ (press enter for every option)
 
 Modify config to allow build disable certificate stuff
@@ -35,6 +35,8 @@ $ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS ""
 
 Compile the kernel
 $ fakeroot make -j${NUM_PROCS} LOCALVERSION=${KERNEL_NAME_APPED}
+$ fakeroot make -j20 LOCALVERSION=-patched
+
 
 Build successful if following command returns 0
 $ echo $?
@@ -51,7 +53,7 @@ $ uname -rs
 
 
 
-# Start - Patch and Install Kernel
+# Start - Manually Patch and Install Kernel
 
 Get Kernel tar 
 $ wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.230.tar.xz
@@ -199,3 +201,58 @@ first window: goipc <cr>
 second window: <cr> (running hello_world_trace) first window: stop <cr>
 
 
+# Start - Patch with Patch File and Install Kernel
+
+Get Kernel tar 
+
+Configure Kernel
+$ cd linux-6.6.66
+
+Copy current kernel config
+$ cp -v /boot/config-$(uname -r) .config
+
+Use localmodeconfig to only select currently utilized modules
+$ make localmodconfig
+$ (press enter for every option)
+
+Modify config to allow build disable certificate stuff
+$ scripts/config --disable SYSTEM_TRUSTED_KEYS
+$ scripts/config --disable SYSTEM_REVOCATION_KEYS
+$ scripts/config --set-str CONFIG_SYSTEM_TRUSTED_KEYS ""
+$ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS ""
+
+
+# Apply Patch
+patch -p1 < kutrace_patch_file_6.6.36.txt
+
+
+This changes about 24 files, installing new files include/linux/kutrace.h,
+kernel/kutrace/kutrace.c, and kernel/kutrace/Makefile. All the other changes are simple
+mostly-one-line hooks to record individual KUtrace events.
+
+$make menuconfig
+
+Find the KUtrace configuration choice inserted by the patched arch/x86/Kconfig and 
+turn it on.
+
+Check current sampling frequency
+  $ grep 'HZ' /boot/config-$(uname -r)
+You want to be sure that HZ_PERIODIC is set and that the various NO_HZ choices are not set.
+
+
+Compile the kernel
+$ fakeroot make -j${NUM_PROCS} LOCALVERSION=${KERNEL_NAME_APPED}
+$ fakeroot make -j20 LOCALVERSION=-patched
+
+Build successful if following command returns 0
+$ echo $?
+
+# Install
+Kernel modules
+$ sudo make modules_install
+Kernel itself
+$ sudo make install
+Reboot
+$ sudo reboot
+Confirm install
+$ uname -rs
