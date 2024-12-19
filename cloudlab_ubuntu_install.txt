@@ -225,7 +225,6 @@ $ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS ""
 # Apply Patch
 patch -p1 < kutrace_patch_file_6.6.36.txt
 
-
 This changes about 24 files, installing new files include/linux/kutrace.h,
 kernel/kutrace/kutrace.c, and kernel/kutrace/Makefile. All the other changes are simple
 mostly-one-line hooks to record individual KUtrace events.
@@ -257,3 +256,75 @@ Reboot
 $ sudo reboot
 Confirm install
 $ uname -rs
+
+# Run and Test 
+
+
+(3) The loadable module
+From the github KUtrace code, download the linux/module and postproc subdirectories
+$ cd linux/module
+$ make
+
+This produces kutrace_mod.ko, which has to be recompiled each time you modify the kernel
+because it links against exported symbols there, including the exported KUtrace
+variables.
+
+$ sudo insmod kutrace_mod.ko tracemb=20 check=0
+
+This installs the loadable module, which has all the implementation code for the hooks
+patched into various kernel source files above. It also has the implementation code
+for user-supplied control calls via the kutrace_control program or the lower-level 
+kutrace_lib code linked into some program.
+
+tracemb specifies the size in megabytes of the reserved trace buffer.
+check   specifies whether to require the PTRACE privilege in a task that does
+        user-supplied calls. 0 means don't check.
+
+(The command $ sudo rmmod kutrace_mod.ko removes the module)
+   
+
+(4) The control and postprocessing code
+From the github KUtrace code,
+$ cd postproc
+$ ./build.sh
+
+This compiles the postprocessing programs.
+
+
+(5) Make a trace
+From the github KUtrace code,
+$ cd postproc
+$ ./kutrace_control
+
+At the prompt, type "goipc<cr>"
+and at the next prompt, type "stop<cr>"
+
+go       starts a trace
+goipc    starts a trace that also includes instructions-per-cycle for each timespan
+gollc    starts a trace that also includes last-level cache misses for each timespan
+goipcllc does both (ipc and llc are in alphabetic order here)
+stop     stops a trace and writes the raw trace binary to a disk file
+
+This will write a raw trace file with a name like
+  ku_20240709_152922_dclab-2_11686.trace
+  
+$ ./postproc3.sh ku_20240709_152922_dclab-2_11686.trace "Caption here"
+
+This will produce 
+  ku_20240709_152922_dclab-2_11686.json and
+  ku_20240709_152922_dclab-2_11686.html
+  
+and try to open the HTML in the Google Chrome browser (if you want a different browser, 
+change the script to use it instead). If all goes well, your browser will display the
+the full trace timeline, with rows for multiple CPU cores. It will mostly be idle job 
+loop and timer interrupts, but you can pan (click-drag) and zoom (mouse wheel)
+around to see what is there. See the github KUtrace files
+  hello_world_demo_live.html and
+  hello_world_walkthrough.pdf
+for some guidance on what to look for.
+  
+
+(6) Go celebrate
+
+
+
