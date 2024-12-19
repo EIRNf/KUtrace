@@ -231,9 +231,10 @@ kernel/kutrace/kutrace.c, and kernel/kutrace/Makefile. All the other changes are
 mostly-one-line hooks to record individual KUtrace events.
 
 $make menuconfig
-
 Find the KUtrace configuration choice inserted by the patched arch/x86/Kconfig and 
 turn it on.
+Also ensure the MSR for your particular architecture is set to yes
+ /dev/cpu/*/msr - Model-specific register support      = y    
 
 Check current sampling frequency
   $ grep 'HZ' /boot/config-$(uname -r)
